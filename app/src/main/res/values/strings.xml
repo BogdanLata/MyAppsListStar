@@ -1,5 +1,8 @@
 <resources>
     <string name="app_name">MyAppsListStar</string>
-    <string name="button_list_apps">Button List</string>
+    <string name="apps_list">Apps List</string>
     <string name="savetofile">Save to file</string>
+    <string name="title_user_apps">User Apps</string>
+    <string name="title_system_apps">System Apps</string>
+
 </resources>

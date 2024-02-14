@@ -2,36 +2,46 @@ package com.example.myappsliststar
 
 import android.annotation.SuppressLint
 import android.content.ContentResolver
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ListView
+import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import java.util.Locale
+import android.graphics.Color
+import android.net.Uri
+import android.view.ViewGroup
+import android.widget.BaseAdapter
+
 
 class MainActivity : AppCompatActivity() {
 
     private val saveFileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             result.data?.data?.let { uri ->
-                val contentResolver: ContentResolver = contentResolver
-                contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    val installedApps = getInstalledApps()
-                    for (app in installedApps) {
-                        outputStream.write("${app.uppercase(Locale.ROOT)} \n".toByteArray())
-                    }
-                }
+                contentResolver
+                val (nonSystemApps, systemApps) = getInstalledApps()
+                writeAppsToOutputStream(uri, nonSystemApps ,systemApps)
             }
         }
     }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
+    private fun writeAppsToOutputStream(uri: Uri, nonSystemApps: List<String>, systemApps: List<String>) {
+        contentResolver.openOutputStream(uri)?.use { outputStream ->
+            val allApps = nonSystemApps + systemApps
+            for (app in allApps) {
+                outputStream.write("${app.uppercase(Locale.ROOT)} \n".toByteArray())
+            }
+        }
+    }override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -39,8 +49,8 @@ class MainActivity : AppCompatActivity() {
         val listAppsButton: Button = findViewById(R.id.listAppsButton)
         listAppsButton.setOnClickListener {
             // Handle List Apps button click
-            val installedApps = getInstalledApps()
-            updateListView(installedApps)
+            val (nonSystemApps, systemApps) = getInstalledApps()
+            updateListView(nonSystemApps, systemApps)
         }
 
         // Find the Save to File Button by its ID and set the click listener
@@ -51,9 +61,68 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
+
+
+    class AppsAdapter(context: Context, userApps: List<String>, systemApps: List<String>) : BaseAdapter() {
+        private val context: Context = context
+        private val userApps: List<String> = userApps
+        private val systemApps: List<String> = systemApps
+
+        override fun getCount(): Int {
+            return userApps.size + systemApps.size + 2 // Add 2 for the titles
+        }
+
+        override fun getItem(position: Int): Any {
+            return when (position) {
+                0 -> "User Apps"
+                userApps.size + 1 -> "System Apps"
+                in 1 until userApps.size + 1 -> userApps[position - 1]
+                else -> systemApps[position - userApps.size - 2]
+            }
+        }
+
+        override fun getItemId(position: Int): Long {
+            return position.toLong()
+        }
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+            val titleView = TextView(context)
+            titleView.apply {
+                textSize = 20f
+                setTextColor(Color.RED)
+                textAlignment = View.TEXT_ALIGNMENT_CENTER
+            }
+
+            return when (position) {
+                0 -> {
+                    titleView.text = "User Apps"
+                    titleView
+                }
+                userApps.size + 1 -> {
+                    titleView.text = "System Apps"
+                    titleView
+                }
+                in 1 until userApps.size + 1 -> {
+                    val userAppView = TextView(context)
+                    userAppView.text = userApps[position - 1]
+                    userAppView
+                }
+                else -> {
+                    val systemAppView = TextView(context)
+                    systemAppView.text = systemApps[position - userApps.size - 2]
+                    systemAppView
+                }
+            }
+        }
+    }
+
+
+
+
     @SuppressLint("QueryPermissionsNeeded")
-    private fun getInstalledApps(): List<String> {
-        val packageManager: PackageManager = packageManager
+    private fun getInstalledApps(): Pair<List<String>, List<String>> {
+        val packageManager = packageManager
         val nonSystemApps = mutableListOf<String>()
         val systemApps = mutableListOf<String>()
 
@@ -70,15 +139,21 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        return nonSystemApps.sorted() + systemApps.sorted()
+        return Pair(nonSystemApps.sorted(), systemApps.sorted())
     }
 
-    private fun updateListView(apps: List<String>) {
+
+    private fun updateListView(userApps: List<String>, systemApps: List<String>) {
         // Display the sorted list in a ListView
         val listView: ListView = findViewById(R.id.appListView)
-        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, apps)
-        listView.adapter = adapter
+
+        // Create a custom adapter for your apps
+        val appsAdapter = AppsAdapter(this, userApps, systemApps)
+
+        // Set the custom adapter
+        listView.adapter = appsAdapter
     }
+
 
     private fun createFile() {
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
